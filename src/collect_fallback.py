@@ -132,11 +132,11 @@ def collect_and_save_etf_data(output_path: str) -> None:
     if dir_name and not os.path.exists(dir_name):
         os.makedirs(dir_name, exist_ok=True)
 
-    # Save to file
+    # Save to file (Minify JSON to minimize file size on static hosting)
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(processed_list, f, ensure_ascii=False, indent=2)
+        json.dump(processed_list, f, ensure_ascii=False, separators=(',', ':'))
 
-    print(f"Data saved successfully to {output_path}")
+    print(f"Data saved successfully (minified) to {output_path}")
 
 if __name__ == "__main__":
     import numpy as np  # Imported here for safety in case not loaded in context

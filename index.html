@@ -606,15 +606,20 @@
         let etfData = [];
         let brandsList = [];
         let chartInstances = [];
+        let activeTab = 'overview';
+        let renderedTabs = { overview: false, charts: false, explorer: false, validation: false };
 
         // Main Initialize
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
-            reloadData();
+            // 최초 접속 시 3초 딜레이가 발생하는 실시간 JSONP 대기 대신 로컬 데이터를 즉시 로드
+            loadFallbackData();
         });
 
         // Toggle Tabs
         function switchTab(tabName) {
+            activeTab = tabName;
+
             // Update button styling
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active-tab');
@@ -627,15 +632,22 @@
             });
             document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
 
-            // Trigger chart resize because hidden echarts container fails to render properly
-            if (tabName === 'charts') {
+            // Lazy Rendering (탭이 활성화되는 시점에만 렌더링을 진행하여 초기 로딩 부하 제거)
+            if (!renderedTabs[tabName]) {
+                if (tabName === 'overview') renderOverviewTab();
+                else if (tabName === 'charts') renderAllCharts();
+                else if (tabName === 'explorer') renderExplorerTab();
+                else if (tabName === 'validation') renderValidationTab();
+                renderedTabs[tabName] = true;
+            } else if (tabName === 'charts') {
+                // 이미 렌더링된 charts 탭인 경우 레이아웃 깨짐을 방지하기 위해 resize 호출
                 setTimeout(() => {
                     chartInstances.forEach(chart => chart.resize());
                 }, 50);
             }
         }
 
-        // Data Loader (Hybrid: JSONP -> Fallback JSON)
+        // Data Loader (실시간 새로고침 시에만 Naver API JSONP 호출하도록 변경)
         function reloadData() {
             setLoadingStatus(true);
             etfData = [];
@@ -647,14 +659,14 @@
             const oldScript = document.getElementById('jsonp-naver-api');
             if (oldScript) oldScript.remove();
 
-            // Set up a safety timeout (3 seconds) for Fallback trigger
+            // 실시간 조회 시에는 빠른 응답을 감안하여 타임아웃을 2초로 단축
             let isLoaded = false;
             const timeoutId = setTimeout(() => {
                 if (!isLoaded) {
-                    console.warn("JSONP request timed out. Triggering fallback JSON load.");
+                    console.warn("JSONP request timed out during reload. Triggering fallback JSON load.");
                     loadFallbackData();
                 }
-            }, 3000);
+            }, 2000);
 
             // Dynamically define callback function globally as naver API demands window.__jindo2_callback._7957
             if (!window.__jindo2_callback) window.__jindo2_callback = {};
@@ -683,8 +695,9 @@
             document.body.appendChild(script);
         }
 
-        // Fallback Loader (Fetch data/etf_fallback.json)
+        // Fallback Loader (Fetch data/etf_fallback.json - 최초 페이지 진입 시 실행됨)
         function loadFallbackData() {
+            setLoadingStatus(true);
             fetch('data/etf_fallback.json')
                 .then(response => {
                     if (!response.ok) throw new Error("Fallback JSON file not found.");
@@ -692,7 +705,6 @@
                 })
                 .then(data => {
                     console.log("Fallback JSON loaded successfully.");
-                    // In fallback JSON, it is already preprocessed array
                     processProcessedData(data, "로컬 백업 데이터 (Fallback JSON)");
                 })
                 .catch(err => {
@@ -780,11 +792,15 @@
             // Populate filters
             populateBrandFilter();
 
-            // Render Tabs
-            renderOverviewTab();
-            renderExplorerTab();
-            renderValidationTab();
-            renderAllCharts();
+            // 데이터가 새로 갱신되었으므로 모든 탭의 렌더링 플래그 초기화
+            renderedTabs = { overview: false, charts: false, explorer: false, validation: false };
+
+            // 현재 활성화된 탭만 우선적으로 렌더링 (지연 렌더링 적용)
+            if (activeTab === 'overview') renderOverviewTab();
+            else if (activeTab === 'charts') renderAllCharts();
+            else if (activeTab === 'explorer') renderExplorerTab();
+            else if (activeTab === 'validation') renderValidationTab();
+            renderedTabs[activeTab] = true;
         }
 
         // Update Connection Status in UI
