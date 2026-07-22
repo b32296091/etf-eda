@@ -2,7 +2,7 @@ name: Deploy ETF EDA Dashboard to GitHub Pages
 
 on:
   schedule:
-    - cron: '*/1 * * * *' # Run every 1 minute
+    - cron: '*/5 * * * *' # Run every 5 minutes
   workflow_dispatch: # Enable manual trigger
   push:
     branches:
