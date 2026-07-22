@@ -433,6 +433,24 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Chart 11 (Treemap - Full Width) -->
+            <div class="bg-cardBg border border-gray-800 rounded-xl p-6 mt-8 flex flex-col justify-between card-glow">
+                <div>
+                    <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 bg-neonCyan rounded-full"></span> 11. 운용사 및 종목별 시가총액 트리맵 (Treemap)
+                    </h4>
+                    <p class="text-xs text-textMuted mb-4">운용사별 주요 ETF 종목들의 시가총액 규모 및 기여도 다차원 계층 시각화 (각 운용사 박스 클릭 시 내부 드릴다운)</p>
+                </div>
+                <div id="chart-etf-treemap" class="chart-container" style="height: 550px;"></div>
+                <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                    <h5 class="font-bold text-neonCyan mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                    <div id="table-etf-treemap" class="mb-3 overflow-x-auto"></div>
+                    <p class="leading-relaxed">
+                        <strong>[분석 리포트]</strong> 운용사 및 종목별 시가총액 트리맵(Treemap)은 시장 구성의 전체 계층 구조와 개별 핵심 상품의 기여도를 기하학적 면적으로 대변해 주는 강력한 다차원 탐색 도구입니다. 이 시각화에서는 삼성 'KODEX'와 미래에셋 'TIGER'라는 거대 브랜드 노드가 차트의 지배적인 영역을 차지하고, 그 내부에서 대형 지수형 상품과 유동성 파킹형 상품이 사각형 면적의 대부분을 잠식하고 있는 양상을 매우 선명하게 보여줍니다. 이는 중소형 자산운용사의 개별 테마 상품들이 갖는 자금 동원력의 한계를 극명히 증명하며, 특정 메머드급 상품들의 흥행이 자산운용사 전체 AUM의 성패를 가르는 '승자독식'의 비즈니스 현실을 방증합니다. 이에 따라 후발 운용사들은 대형 운용사들이 장악한 지수 추종형 시장에서 정면 대결을 지양하고, 글로벌 신성장 동력 테마나 고배당 커버드콜과 같이 기관 및 고액 자산가의 연금 적립식 수요를 유인할 수 있는 고부가가치 특화 상품에 마케팅 역량을 집중 배치(Action Plan)하여 영역별 틈새를 공략해야만 장기적인 수수료 매출 증대와 시장 점유 생존을 담보할 수 있을 것입니다.
+                    </p>
+                </div>
+            </div>
         </section>
 
         <!-- 3. Explorer Tab -->
@@ -973,7 +991,7 @@
                 brandTableBody.innerHTML += row;
             });
 
-            // Mini Overview Pie Chart (ECharts)
+            // Mini Overview Bar Chart (ECharts - Pie에서 Bar로 변경)
             const overviewPie = echarts.init(document.getElementById('overview-pie-chart'), 'dark');
             const pieData = brandStatsList.slice(0, 5).map(item => ({ name: item.brand, value: item.marketSum }));
             const remainingSum = brandStatsList.slice(5).reduce((acc, item) => acc + item.marketSum, 0);
@@ -983,15 +1001,21 @@
 
             overviewPie.setOption({
                 backgroundColor: 'transparent',
-                tooltip: { trigger: 'item', formatter: '{b}: {c}억 ({d}%)' },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '10%', bottom: '5%', top: '5%', containLabel: true },
+                xAxis: { type: 'value', axisLabel: { color: '#8A99AD', fontSize: 10 }, splitLine: { lineStyle: { color: '#1E2937' } } },
+                yAxis: { type: 'category', data: pieData.map(x => x.name).reverse(), axisLabel: { color: '#8A99AD', fontSize: 10 } },
                 series: [{
-                    type: 'pie',
-                    radius: ['45%', '70%'],
-                    avoidLabelOverlap: false,
-                    itemStyle: { borderRadius: 6, borderColor: '#121824', borderWidth: 2 },
-                    label: { show: true, position: 'outside', formatter: '{b}\n({d}%)', fontSize: 10, color: '#8A99AD' },
-                    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
-                    data: pieData
+                    name: '시가총액 (억 원)',
+                    type: 'bar',
+                    data: pieData.map(x => x.value).reverse(),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: 'rgba(189, 0, 255, 0.3)' },
+                            { offset: 1, color: '#BD00FF' }
+                        ]),
+                        borderRadius: [0, 4, 4, 0]
+                    }
                 }]
             });
             chartInstances.push(overviewPie);
@@ -1196,18 +1220,26 @@
             createHistogramChart('chart-return-dist', returnBins.labels, returnBins.counts, '3M 수익률 빈도 (종목 수)', '#BD00FF', themeConfig);
             populateSummaryTableFromBins('table-return-dist', returnBins);
 
-            // 4. Chart: Brand Share (Count)
+            // 4. Chart: Brand Share (Count) - Bar Chart로 변경
             const brandCounts = {};
             etfData.forEach(x => brandCounts[x.brand] = (brandCounts[x.brand] || 0) + 1);
             const brandCountData = Object.keys(brandCounts).map(k => ({ name: k, value: brandCounts[k] })).sort((a,b) => b.value - a.value);
-            createPieChart('chart-brand-count', brandCountData, themeConfig);
+            createBarChart('chart-brand-count', 
+                brandCountData.slice(0, 8).map(x => x.name).reverse(), 
+                brandCountData.slice(0, 8).map(x => x.value).reverse(), 
+                '상장 종목 수 (개)', '#FFA800', themeConfig
+            );
             populateSummaryTable('table-brand-count', brandCountData.slice(0, 5), ['name', 'value'], true);
 
-            // 5. Chart: Brand Share (Market Cap)
+            // 5. Chart: Brand Share (Market Cap) - Bar Chart로 변경
             const brandCaps = {};
             etfData.forEach(x => brandCaps[x.brand] = (brandCaps[x.brand] || 0) + x.marketSum);
             const brandCapData = Object.keys(brandCaps).map(k => ({ name: k, value: brandCaps[k] })).sort((a,b) => b.value - a.value);
-            createPieChart('chart-brand-market-sum', brandCapData, themeConfig);
+            createBarChart('chart-brand-market-sum', 
+                brandCapData.slice(0, 8).map(x => x.name).reverse(), 
+                brandCapData.slice(0, 8).map(x => x.value).reverse(), 
+                '총 시가총액 (억 원)', '#FF4B91', themeConfig
+            );
             populateSummaryTable('table-brand-market-sum', brandCapData.slice(0, 5), ['name', 'value'], true);
 
             // 6. Chart: Volume vs Market Cap Scatter
@@ -1253,6 +1285,78 @@
                 '평균 3M 수익률 (%)', '#FFCC00', themeConfig
             );
             populateSummaryTable('table-brand-avg-return', brandAvgReturns.slice(0, 5), ['name', 'value'], true);
+
+            // 11. Chart: ETF Treemap (Brand > ETF Items)
+            // Group by brand
+            const brandGroupsForTree = {};
+            etfData.forEach(item => {
+                if (!brandGroupsForTree[item.brand]) brandGroupsForTree[item.brand] = [];
+                brandGroupsForTree[item.brand].push(item);
+            });
+
+            // Map and limit child items to prevent chart mess
+            const treemapData = Object.keys(brandGroupsForTree).map(bName => {
+                const items = brandGroupsForTree[bName].sort((a,b) => b.marketSum - a.marketSum);
+                const limit = 8; // Show top 8 items individually
+                const topItems = items.slice(0, limit).map(x => ({
+                    name: x.itemname,
+                    value: x.marketSum
+                }));
+                const remaining = items.slice(limit);
+                if (remaining.length > 0) {
+                    const remainingSum = remaining.reduce((sum, x) => sum + x.marketSum, 0);
+                    topItems.push({
+                        name: `기타 (${remaining.length}개 종목)`,
+                        value: remainingSum
+                    });
+                }
+                const totalSum = items.reduce((sum, x) => sum + x.marketSum, 0);
+                return {
+                    name: bName,
+                    value: totalSum,
+                    children: topItems
+                };
+            }).sort((a,b) => b.value - a.value); // Large brands first
+
+            createTreemapChart('chart-etf-treemap', treemapData);
+
+            // Populate Treemap Table
+            const treemapSummary = treemapData.slice(0, 5).map(x => {
+                // Find top individual asset name in this brand
+                const brandItems = brandGroupsForTree[x.name];
+                const topAsset = brandItems.sort((a,b) => b.marketSum - a.marketSum)[0];
+                return {
+                    name: x.name,
+                    value: x.value, // Total Cap
+                    topAssetName: topAsset ? topAsset.itemname : "없음",
+                    topAssetValue: topAsset ? topAsset.marketSum : 0
+                };
+            });
+
+            // Custom table rendering for Treemap Summary
+            const treemapTableWrapper = document.getElementById('table-etf-treemap');
+            treemapTableWrapper.innerHTML = `
+                <table class="w-full text-left text-[11px] border border-gray-800 text-gray-400">
+                    <thead class="bg-[#121824] text-textMuted">
+                        <tr>
+                            <th class="px-2 py-1.5">운용사 (브랜드)</th>
+                            <th class="px-2 py-1.5 text-right">총 시가총액 (억)</th>
+                            <th class="px-2 py-1.5">대표 상품 (시총 1위)</th>
+                            <th class="px-2 py-1.5 text-right">대표 상품 시총 (억)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        ${treemapSummary.map(row => `
+                            <tr class="hover:bg-[#121824]/50">
+                                <td class="px-2 py-1 font-semibold text-white">${row.name}</td>
+                                <td class="px-2 py-1 text-right font-semibold">${row.value.toLocaleString()}</td>
+                                <td class="px-2 py-1 text-textMuted">${row.topAssetName}</td>
+                                <td class="px-2 py-1 text-right text-neonCyan">${row.topAssetValue.toLocaleString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
         }
 
         // ==========================================
@@ -1295,6 +1399,63 @@
                     data: data.slice(0, 8).concat(data.length > 8 ? [{ name: '기타', value: data.slice(8).reduce((acc,x) => acc + x.value, 0) }] : []),
                     itemStyle: { borderRadius: 4, borderColor: '#121824', borderWidth: 1.5 },
                     label: { color: '#8A99AD', fontSize: 10, formatter: '{b}: {d}%' }
+                }]
+            });
+            chartInstances.push(chart);
+        }
+
+        function createTreemapChart(domId, data) {
+            const chart = echarts.init(document.getElementById(domId), 'dark');
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    formatter: function (info) {
+                        const value = info.value;
+                        const treePathInfo = info.treePathInfo;
+                        const treePath = [];
+                        for (let i = 1; i < treePathInfo.length; i++) {
+                            treePath.push(treePathInfo[i].name);
+                        }
+                        return `<div class="text-xs font-bold text-neonCyan mb-1">${treePath.join(' &gt; ')}</div>
+                                시가총액: <b>${value.toLocaleString()}</b> 억 원`;
+                    }
+                },
+                series: [{
+                    name: 'ETF 시장 구조',
+                    type: 'treemap',
+                    leafDepth: 1,
+                    visibleMin: 200,
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{c}억',
+                        fontSize: 10
+                    },
+                    upperLabel: {
+                        show: true,
+                        height: 24,
+                        color: '#FFFFFF',
+                        fontWeight: 'bold',
+                        fontSize: 11
+                    },
+                    itemStyle: {
+                        borderColor: '#0A0E17',
+                        borderWidth: 1,
+                        gapWidth: 2
+                    },
+                    levels: [
+                        {
+                            itemStyle: {
+                                borderWidth: 0,
+                                gapWidth: 4
+                            }
+                        },
+                        {
+                            itemStyle: {
+                                gapWidth: 1
+                            }
+                        }
+                    ],
+                    data: data
                 }]
             });
             chartInstances.push(chart);
