@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naver ETF Real-time EDA Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Lucide Icons (for premium look) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        darkBg: '#0A0E17',
+                        cardBg: '#121824',
+                        neonMint: '#00FFA3',
+                        neonCyan: '#00E5FF',
+                        neonPurple: '#BD00FF',
+                        textMuted: '#8A99AD'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0A0E17;
+            color: #FFFFFF;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .main-gradient-text {
+            background: linear-gradient(135deg, #00FFA3 0%, #00E5FF 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0A0E17;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #1F2937;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #00E5FF;
+        }
+        .active-tab {
+            border-bottom: 2px solid #00E5FF;
+            color: #00E5FF;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+        }
+        .card-glow {
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-glow:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 229, 255, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 229, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="custom-scrollbar min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-[#0A0E17] sticky top-0 z-50 bg-opacity-80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-gradient-to-tr from-neonMint to-neonCyan rounded-xl shadow-lg">
+                    <i data-lucide="trending-up" class="w-6 h-6 text-darkBg"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-extrabold font-outfit tracking-tight main-gradient-text">ETF Real-time EDA</h1>
+                    <p class="text-xs text-textMuted">네이버 금융 실시간 API 기반 다차원 탐색적 분석</p>
+                </div>
+            </div>
+            <!-- Connection Status Badge -->
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col items-end text-xs">
+                    <span class="font-medium text-white flex items-center gap-1.5">
+                        <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block animate-ping"></span>
+                        <span id="status-text">데이터 로딩 중...</span>
+                    </span>
+                    <span id="update-time" class="text-textMuted mt-0.5">업데이트 정보 없음</span>
+                </div>
+                <button onclick="reloadData()" class="px-4 py-2 bg-gradient-to-r from-neonCyan to-blue-600 hover:from-neonMint hover:to-neonCyan text-darkBg font-bold rounded-lg shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition-all text-sm flex items-center gap-1.5">
+                    <i data-lucide="rotate-cw" class="w-4 h-4"></i> 새로고침
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Dashboard Navigation -->
+        <div class="border-b border-gray-800 flex flex-wrap gap-1 mb-8">
+            <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn px-5 py-3 text-sm font-semibold text-textMuted hover:text-white transition-all border-b-2 border-transparent active-tab flex items-center gap-2">
+                <i data-lucide="pie-chart" class="w-4 h-4"></i> 대시보드 개요
+            </button>
+            <button onclick="switchTab('charts')" id="tab-btn-charts" class="tab-btn px-5 py-3 text-sm font-semibold text-textMuted hover:text-white transition-all border-b-2 border-transparent flex items-center gap-2">
+                <i data-lucide="bar-chart-2" class="w-4 h-4"></i> 인터랙티브 EDA
+            </button>
+            <button onclick="switchTab('explorer')" id="tab-btn-explorer" class="tab-btn px-5 py-3 text-sm font-semibold text-textMuted hover:text-white transition-all border-b-2 border-transparent flex items-center gap-2">
+                <i data-lucide="search" class="w-4 h-4"></i> 종목 탐색기
+            </button>
+            <button onclick="switchTab('validation')" id="tab-btn-validation" class="tab-btn px-5 py-3 text-sm font-semibold text-textMuted hover:text-white transition-all border-b-2 border-transparent flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-4 h-4"></i> 무결성 검증
+            </button>
+        </div>
+
+        <!-- 1. Overview Tab -->
+        <section id="tab-content-overview" class="tab-content block">
+            <!-- Key Metrics Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-cardBg card-glow rounded-xl p-5 flex items-center gap-4">
+                    <div class="p-3 bg-neonMint/10 rounded-lg text-neonMint">
+                        <i data-lucide="layers" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-textMuted uppercase font-semibold">총 ETF 종목 수</p>
+                        <h3 id="metric-total-count" class="text-2xl font-bold font-outfit">0 개</h3>
+                    </div>
+                </div>
+                <div class="bg-cardBg card-glow rounded-xl p-5 flex items-center gap-4">
+                    <div class="p-3 bg-neonCyan/10 rounded-lg text-neonCyan">
+                        <i data-lucide="wallet" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-textMuted uppercase font-semibold">총 시가총액 합계</p>
+                        <h3 id="metric-total-market-cap" class="text-2xl font-bold font-outfit">0 억 원</h3>
+                    </div>
+                </div>
+                <div class="bg-cardBg card-glow rounded-xl p-5 flex items-center gap-4">
+                    <div class="p-3 bg-neonPurple/10 rounded-lg text-neonPurple">
+                        <i data-lucide="activity" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-textMuted uppercase font-semibold">총 일일 거래대금</p>
+                        <h3 id="metric-total-amount" class="text-2xl font-bold font-outfit">0 백만 원</h3>
+                    </div>
+                </div>
+                <div class="bg-cardBg card-glow rounded-xl p-5 flex items-center gap-4">
+                    <div class="p-3 bg-yellow-400/10 rounded-lg text-yellow-400">
+                        <i data-lucide="database" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-textMuted uppercase font-semibold">데이터 소스 상태</p>
+                        <h3 id="metric-data-source" class="text-base font-bold font-outfit truncate">확인 중</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descriptive Statistics Table -->
+            <div class="bg-cardBg border border-gray-800 rounded-xl p-6 mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold font-outfit flex items-center gap-2">
+                        <i data-lucide="calculator" class="text-neonCyan"></i> 수치형 변수 기술 통계 요약 (왜도 & 첨도 포함)
+                    </h3>
+                    <span class="text-xs text-textMuted">※ 표본 통계 공식으로 계산됨</span>
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs uppercase bg-[#1A2234] text-textMuted">
+                            <tr>
+                                <th class="px-4 py-3">변수명</th>
+                                <th class="px-4 py-3 text-right">평균 (Mean)</th>
+                                <th class="px-4 py-3 text-right">중앙값 (Median)</th>
+                                <th class="px-4 py-3 text-right">표준편차 (Std Dev)</th>
+                                <th class="px-4 py-3 text-right">최소값 (Min)</th>
+                                <th class="px-4 py-3 text-right">최대값 (Max)</th>
+                                <th class="px-4 py-3 text-right">왜도 (Skewness)</th>
+                                <th class="px-4 py-3 text-right">첨도 (Kurtosis)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stats-table-body" class="divide-y divide-gray-800">
+                            <!-- JS dynamic insertions -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Brand Summary Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Brand Table -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 lg:col-span-2">
+                    <h3 class="text-lg font-bold font-outfit mb-4 flex items-center gap-2">
+                        <i data-lucide="grid" class="text-neonMint"></i> 주요 자산운용사(브랜드)별 요약
+                    </h3>
+                    <div class="overflow-y-auto max-h-[350px] custom-scrollbar">
+                        <table class="w-full text-sm text-left text-gray-300">
+                            <thead class="text-xs bg-[#1A2234] text-textMuted sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-3">운용사 (브랜드)</th>
+                                    <th class="px-4 py-3 text-right">종목 수 (개)</th>
+                                    <th class="px-4 py-3 text-right">비중 (%)</th>
+                                    <th class="px-4 py-3 text-right">총 시가총액 (억)</th>
+                                    <th class="px-4 py-3 text-right">평균 3M 수익률 (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="brand-table-body" class="divide-y divide-gray-800">
+                                <!-- JS dynamic insertions -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Mini Charts for Overview -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold font-outfit mb-2 flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="text-neonPurple"></i> 시장 점유율 분석
+                        </h3>
+                        <p class="text-xs text-textMuted mb-4">시가총액 규모 기준 운용사 점유율 현황</p>
+                    </div>
+                    <div id="overview-pie-chart" class="w-full h-[280px]"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Charts Tab (10 Interactive EDA Charts) -->
+        <section id="tab-content-charts" class="tab-content hidden space-y-12">
+            <!-- Carousel-like grid structure for ECharts and Detailed Reports -->
+            
+            <!-- Chart 1 & Chart 2 (Market Cap and Trading Amount top 10) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Card 1 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-neonMint rounded-full"></span> 1. 시가총액 상위 Top 10 종목
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">개별 ETF 시가총액 규모 순위 분석</p>
+                    </div>
+                    <div id="chart-market-cap-top10" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-neonMint mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-market-cap-top10" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 대한민국 ETF 시장 내 시가총액 상위 종목은 'KODEX 200', 'TIGER CD금리액티브' 등 대형 지수 추종 상품 및 파킹형 금리 ETF가 장악하고 있습니다. 이는 주식형 시장 지수 중심의 패시브 투자 성향과 단기 유동 자금의 피난처 역할을 하는 단기 금리 상품에 유동성이 극도로 집중되어 있음을 뜻합니다. 자산 배분 관점에서 볼 때 이러한 대형 상품의 풍부한 거래량은 슬리피지를 최소화해 주는 장점이 있어 대형 기관 및 외국인 투자자들의 진입 장벽을 낮춰주는 긍정적인 비즈니스 효과를 냅니다. 향후 자산운용사는 해당 시장 지수 상품의 운용보수(TER) 인하 경쟁에서 벗어나, 특화된 액티브 ETF나 대체 자산군 상품을 기획하여 틈새 시장의 경쟁력을 넓히는 포트폴리오 다각화 전략(Action Plan)이 시급할 것으로 판단됩니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-neonCyan rounded-full"></span> 2. 거래대금 상위 Top 10 종목
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">당일 누적 거래대금 기준 유동성 흐름 분석</p>
+                    </div>
+                    <div id="chart-amount-top10" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-neonCyan mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-amount-top10" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 거래대금 Top 10 리포트는 현재 투자자들의 단기 매매 수요가 강하게 쏠린 상품들을 직관적으로 확인시켜 줍니다. 주로 레버리지, 인버스 계열의 고변동성 상품과 레포(Repo) 및 초단기 CD금리형 ETF가 최상위에 랭크되는 양상이 두드러집니다. 이 같은 유동성 쏠림은 지수의 방향성 매매 혹은 현금 예치를 위해 단기 매매가 극도로 활성화되어 있음을 의미하며, 거래세 면제 등의 혜택을 100% 누리려는 트레이더들의 움직임이 반영된 비즈니스 트렌드입니다. 운용사는 거래대금 증가세가 일시적인 헤지 수요인지 근본적인 리테일 자금 확대인지를 정교하게 파악하여 유동성 공급자(LP) 계약 호가 스프레드를 타이트하게 관리함으로써 거래 유입 비용을 낮추는 매커니즘(Action Plan)을 설계해야 합니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 3 & Chart 4 (3M return histogram & Brand Pie) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Card 3 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-neonPurple rounded-full"></span> 3. 3개월 수익률 구간별 분포
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">최근 3개월간 전체 ETF의 성과 구간 분포 분석</p>
+                    </div>
+                    <div id="chart-return-dist" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-neonPurple mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-return-dist" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 3개월 수익률의 빈도 분포(Histogram)는 시장의 단기 성과 방향 및 극단적 양극화 현상을 진단하는 데 효과적입니다. 만약 특정 플러스 성과 구간이나 마이너스 성과 구간에 빈도가 봉우리(Peak)를 형성하며 집중된다면, 최근 3개월간 해당 업종이나 국가(예: 미국 기술주, 반도체 등) 테마가 전체 시장을 강하게 주도하였음을 입증합니다. 좌우 대칭이 무너진 비대칭적 분포(왜도가 0이 아님)는 리스크 관점에서 중대한 신호를 내포하므로, 자산운용 및 리스크 관리 부서는 단기 급등 테마에 투자한 리테일 자금이 갑작스러운 차익 실현 매물로 빠져나갈 때 발생할 펀드 내 괴리율 급등 및 호가 스프레드 확대 리스크를 상시 검증(Action Plan)하고 경고 시스템을 구축해야 합니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-yellow-400 rounded-full"></span> 4. 운용사별 ETF 상장 종목 수
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">자산운용사별 등록된 총 ETF 개수 점유율 분석</p>
+                    </div>
+                    <div id="chart-brand-count" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-yellow-400 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-brand-count" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 자산운용사별 상장 종목 수는 운용사들의 신규 상품 라인업 공격성 및 투자 영토 선점 의지를 극명하게 드러냅니다. 삼성자산운용의 'KODEX'와 미래에셋자산운용의 'TIGER'가 과반에 육박하는 종목 수를 확보하며 시장점유율 쟁탈전을 벌이고 있습니다. 후발 주자들은 양적 팽창 경쟁보다는 독자적인 아이디어 중심의 혁신적 액티브 테마 상품을 출시하여 맞서고 있으며, 이는 경쟁 과열에 따른 수수료 출혈 경쟁을 부르는 면이 있습니다. 중소형 자산운용사는 무차별적인 지수 추종 상품 상장을 피하고, 고유의 투자 철학이 담긴 전문 테마형, 연금 특화 자산배분 타겟데이트펀드(TDF) ETF 개발에 자원을 집중(Action Plan)함으로써 마케팅 및 운영 핀포인트 효율을 높여야 합니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 5 & Chart 6 (Brand Market Cap & Scatter Volume vs Cap) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Card 5 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-pink-500 rounded-full"></span> 5. 운용사별 시가총액 합계 점유율
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">운용사별 ETF 총 운용자산(AUM) 규모 분석</p>
+                    </div>
+                    <div id="chart-brand-market-sum" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-pink-500 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-brand-market-sum" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 운용사별 총 시가총액(AUM) 점유율은 각 브랜드가 획득한 비즈니스 지배력과 신뢰성을 단적으로 측정할 수 있는 최우선 핵심 지표입니다. 종목 수보다 시가총액의 점유율 격차가 더 크게 벌어진다는 점은 대형 기관 유동성을 흡수할 수 있는 메머드급 ETF(예: 금리 연계 파킹형, 종합 지수형) 라인업의 보유 여부에 따라 실질적 영향력이 극단적으로 나뉨을 보여줍니다. AUM 점유율이 높을수록 자금 회수 및 자금 유입이 훨씬 부드럽게 일어나는 '네트워크 효과'가 발생해 마케팅 시너지 극대화로 이어집니다. 중하위 운용사는 핵심 AUM 증대를 위해 고액 자산가 및 연금 자금을 겨냥한 주기적인 자산 리밸런싱 맞춤 포트폴리오 솔루션(Action Plan)을 기획하여 대형 기관 자금을 유치하는 B2B 마케팅 체질 개선에 돌입해야 합니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 6 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-orange-400 rounded-full"></span> 6. 거래량 vs 시가총액 상관 분석
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">ETF 덩치(시가총액) 대비 일 거래 활성도의 상관 관계</p>
+                    </div>
+                    <div id="chart-scatter-quant-cap" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-orange-400 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-scatter-quant-cap" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 시가총액(X축)과 거래량(Y축)의 산점도 분석은 상장지수펀드의 '규모와 활동성' 사이의 구조적 매커니즘을 밝혀줍니다. 시가총액이 크다고 해서 항상 거래량이 폭발적인 것은 아니며, 특정 초단기 채권/레버리지 계열에서만 압도적으로 높은 거래 빈도가 상단 외딴곳(Outlier)에 위치함을 확인하게 됩니다. 덩치에 비해 거래량이 지나치게 빈약한 상품들은 유동성 부재에 따라 대량 매매 시 왜곡된 가격 체결(슬리피지 증가) 위험이 도사리고 있습니다. 따라서 자산운용사는 지정 참가 회사(AP) 및 유동성 공급자(LP)의 호가 촘촘함을 모니터링하여, 시총 대비 일일 회전율이 떨어지는 미흡한 상품들에 마케팅 비용을 집중하거나 상품 구조 조정을 추진하는 효율화 작업(Action Plan)이 상시 필수적입니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 7 & Chart 8 (Scatter Return vs Amount & Change Rate Histogram) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Card 7 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> 7. 3개월 수익률 vs 거래대금 상관 분석
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">성과(수익률)가 높은 상품에 거래대금이 몰리는지 분석</p>
+                    </div>
+                    <div id="chart-scatter-return-amount" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-blue-500 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-scatter-return-amount" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 이 산점도 분석은 투자자들이 최근 좋은 성과를 낸 상위 수익률 ETF로 유동성을 적극적으로 모아주는 '추세 추종(Momentum)' 패턴을 증명하는 강력한 시각화입니다. 보통 우측 상단으로 뻗어나가는 패턴이 발견된다면, 단기 급등 테마(예: AI반도체, 특정 신흥국가 등)의 흥행이 리테일 및 기관 자금 추종을 성공적으로 견인했음을 암시합니다. 반면, 3개월 성과가 압도적임에도 거래대금이 바닥에 기어가는 종목은 대중성 확보 실패 및 리테일 홍보 부재를 겪고 있는 소외 상품입니다. 이를 개선하기 위해 자산운용사는 해당 고성과 소외 상품의 핵심 투자 테마를 스토리텔링식 온라인 및 유튜브 콘텐츠로 개발하여 개인 투자자들에게 적극 전파하는 디지털 마케팅 캠페인(Action Plan)을 강화해야 타당합니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 8 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-emerald-400 rounded-full"></span> 8. 일일 등락률 구간별 분포
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">당일 가격의 변동률이 어떤 밴드에 모여있는지 분석</p>
+                    </div>
+                    <div id="chart-change-rate-dist" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-emerald-400 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-change-rate-dist" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 일일 등락률 분포는 현재 주식 시장 전체의 센티먼트(공포 또는 탐욕)가 어느 편향에 극단적으로 치우쳐 있는지를 실시간으로 측정하는 바로미터입니다. 0%를 중심으로 한 정규분포에 가깝다면 시장이 잔잔하고 보합권에서 횡보하고 있음을 가리키고, 오른쪽 혹은 왼쪽 꼬리가 길게 뻗거나 봉우리가 이동해 비대칭성(왜도 발생)을 보인다면 강력한 모멘텀이 시장 전체의 위험 감수 능력을 흔들고 있음을 실증합니다. 자원 배분 관점에서 급격한 변동성을 겪는 테마 ETF의 꼬리 리스크(Tail Risk)를 헤징하기 위해, 기획 부서는 상방/하방 변동성이 억제된 커버드콜 상품이나 분할 매수 효과를 가지는 혼합 자산 분배형 상품군의 비중을 전략적으로 조절하여 리테일 투자자의 변동성 고통을 경감시키는 리스크 분산(Action Plan)을 조치해야 합니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 9 & Chart 10 (NAV Premium Histogram & Average Return by Brand) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Card 9 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-teal-400 rounded-full"></span> 9. NAV 괴리율(Premium/Discount) 분포
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">순자산가치(NAV) 대비 시장 가격의 왜곡 오차 검증</p>
+                    </div>
+                    <div id="chart-nav-premium-dist" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-teal-400 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-nav-premium-dist" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> NAV 괴리율(Nav Premium/Discount) 분포는 상장된 ETF 가격이 실제 자산 가치를 정밀하게 반영하여 정상 거래되고 있는지 검증하는 투명성 척도입니다. 대다수 국내 상장 지수 ETF는 0% 부근에 극단적으로 높게 수렴해야 마땅하며, 만약 이 분포가 넓게 퍼지거나 ±1%를 벗어나는 아웃라이어 빈도가 많아질 경우 해당 기초 자산의 호가 신뢰도가 붕괴되었음을 시사합니다. 특히 해외 자산, 원자재, 레버리지 상품군에서 장중 괴리율이 심화되는 경향이 있습니다. 운용사는 괴리율이 내부 모니터링 임계치(예: 0.5%)를 상회할 시 유동성 공급자(LP)의 의무 매수/매도 스프레드를 강제적으로 조정하고, 해외 거래소 정산 시간 지연 오차를 보정하기 위해 장중 NAV 계산 알고리즘을 고도화(Action Plan)해야 금융 소비자의 피해를 최소화할 수 있습니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 10 -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between card-glow">
+                    <div>
+                        <h4 class="text-md font-bold font-outfit text-white mb-1 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-yellow-600 rounded-full"></span> 10. 자산운용사별 평균 3개월 수익률 비교
+                        </h4>
+                        <p class="text-xs text-textMuted mb-4">각 브랜드가 보유한 상품군의 단기 평균 운용 성과 비교</p>
+                    </div>
+                    <div id="chart-brand-avg-return" class="chart-container"></div>
+                    <div class="mt-4 p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-gray-300">
+                        <h5 class="font-bold text-yellow-600 mb-2 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 데이터 요약 및 인사이트</h5>
+                        <div id="table-brand-avg-return" class="mb-3 overflow-x-auto"></div>
+                        <p class="leading-relaxed">
+                            <strong>[분석 리포트]</strong> 운용사별 평균 3개월 수익률 비교는 각 브랜드가 최근 주도하고 있는 액티브 및 테마형 상품 라인업의 집합적 성과와 매니저들의 운용 트렌드 적합성을 종합 분석하는 데 유리합니다. 평균 수익률이 유독 높은 자산운용사는 최근 가장 강한 시장 관심을 받는 섹터(메가트렌드)에 영리하게 자본과 상품군을 우선 배정했다는 뜻입니다. 반면 전반적인 평균 수익률이 침체한 운용사는 전통 가치주나 경기 방어주 위주로 상품군이 너무 경직되어 있음을 진단해 줍니다. 운용 성과 경쟁에서 우위를 점하기 위해, 자산운용 기획팀은 상품 성과 부진 장기화 리스크를 줄이기 위한 방어용 다자산 배분 멀티에셋 ETF를 출시하거나, 실시간 포트폴리오 조정 모델을 도입하여 트렌드 부침에 민첩히 방어하는 자산 헷징 라인업(Action Plan)을 보완해야 장기적인 수수료 수익 유지가 가능합니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Explorer Tab -->
+        <section id="tab-content-explorer" class="tab-content hidden">
+            <!-- Filter Controls -->
+            <div class="bg-cardBg border border-gray-800 rounded-xl p-6 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div class="w-full md:w-1/3 relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-textMuted">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </span>
+                    <input type="text" id="explorer-search" oninput="filterExplorer()" placeholder="종목명 또는 종목코드 검색..." class="w-full bg-[#0A0E17] border border-gray-800 rounded-lg py-2 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-neonCyan transition-all">
+                </div>
+                <div class="w-full md:w-auto flex flex-wrap gap-4 items-center">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-textMuted uppercase font-semibold">운용사:</span>
+                        <select id="explorer-filter-brand" onchange="filterExplorer()" class="bg-[#0A0E17] border border-gray-800 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-neonCyan transition-all">
+                            <option value="ALL">전체 운용사</option>
+                            <!-- Dynamic options -->
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-textMuted uppercase font-semibold">정렬:</span>
+                        <select id="explorer-sort" onchange="filterExplorer()" class="bg-[#0A0E17] border border-gray-800 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-neonCyan transition-all">
+                            <option value="marketSum_desc">시가총액 높은순</option>
+                            <option value="amount_desc">거래대금 높은순</option>
+                            <option value="threeMonthEarnRate_desc">3개월 수익률 높은순</option>
+                            <option value="threeMonthEarnRate_asc">3개월 수익률 낮은순</option>
+                            <option value="navPremium_desc">NAV 괴리율 높은순</option>
+                            <option value="itemname_asc">종목명 순 (가나다)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Explorer Table -->
+            <div class="bg-cardBg border border-gray-800 rounded-xl overflow-hidden">
+                <div class="overflow-x-auto custom-scrollbar max-h-[500px]">
+                    <table class="w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs uppercase bg-[#1A2234] text-textMuted sticky top-0 z-10">
+                            <tr>
+                                <th class="px-4 py-3.5">종목코드</th>
+                                <th class="px-4 py-3.5">종목명</th>
+                                <th class="px-4 py-3.5">운용사</th>
+                                <th class="px-4 py-3.5 text-right">현재가 (원)</th>
+                                <th class="px-4 py-3.5 text-right">전일대비 (원)</th>
+                                <th class="px-4 py-3.5 text-right">등락률 (%)</th>
+                                <th class="px-4 py-3.5 text-right">시가총액 (억)</th>
+                                <th class="px-4 py-3.5 text-right">거래대금 (백만)</th>
+                                <th class="px-4 py-3.5 text-right">NAV 괴리율 (%)</th>
+                                <th class="px-4 py-3.5 text-right">3M 수익률 (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="explorer-table-body" class="divide-y divide-gray-800">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-4 bg-[#121824] border-t border-gray-800 flex justify-between items-center text-xs text-textMuted">
+                    <span id="explorer-count">총 0개 중 0개 종목 조회됨</span>
+                    <span>※ 종목 정보는 실시간 기준 또는 수집된 백업을 따름</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Validation Tab -->
+        <section id="tab-content-validation" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Data Consistency Checklist -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6">
+                    <h3 class="text-lg font-bold font-outfit mb-4 flex items-center gap-2">
+                        <i data-lucide="alert-circle" class="text-neonCyan"></i> 데이터 모순성 검증 (Logical Consistency)
+                    </h3>
+                    <p class="text-xs text-textMuted mb-6">데이터 소스 내 모순성이 있는 비정상 아웃라이어 항목 탐지 결과입니다.</p>
+                    
+                    <div class="space-y-4">
+                        <!-- Rule 1 -->
+                        <div class="p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 flex justify-between items-center">
+                            <div>
+                                <h5 class="text-sm font-semibold text-white">Rule 1: 현재가 또는 NAV 누락 검증</h5>
+                                <p class="text-xs text-textMuted">가격이 0 이하이거나 NAV가 정의되지 않은 비정상 종목</p>
+                            </div>
+                            <span id="val-rule-1" class="px-2.5 py-1 rounded text-xs font-semibold">검사 중...</span>
+                        </div>
+                        <!-- Rule 2 -->
+                        <div class="p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 flex justify-between items-center">
+                            <div>
+                                <h5 class="text-sm font-semibold text-white">Rule 2: 거래량/거래대금 모순 검증</h5>
+                                <p class="text-xs text-textMuted">거래량이 존재하나 거래대금이 0인 데이터 모순성 탐지</p>
+                            </div>
+                            <span id="val-rule-2" class="px-2.5 py-1 rounded text-xs font-semibold">검사 중...</span>
+                        </div>
+                        <!-- Rule 3 -->
+                        <div class="p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 flex justify-between items-center">
+                            <div>
+                                <h5 class="text-sm font-semibold text-white">Rule 3: 극단적 NAV 괴리율 탐지</h5>
+                                <p class="text-xs text-textMuted">NAV 괴리율의 절댓값이 3%를 초과하는 비정상 이탈 상태 검사</p>
+                            </div>
+                            <span id="val-rule-3" class="px-2.5 py-1 rounded text-xs font-semibold">검사 중...</span>
+                        </div>
+                    </div>
+
+                    <!-- Invalid Data Showroom -->
+                    <div class="mt-6">
+                        <h4 class="text-sm font-bold text-white mb-3">비정상 탐지 종목 목록</h4>
+                        <div class="overflow-x-auto max-h-[200px] custom-scrollbar border border-gray-800 rounded-lg">
+                            <table class="w-full text-xs text-left text-gray-300">
+                                <thead class="bg-[#1A2234] text-textMuted">
+                                    <tr>
+                                        <th class="px-3 py-2">코드</th>
+                                        <th class="px-3 py-2">종목명</th>
+                                        <th class="px-3 py-2">검증 위반 내용</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="val-anomalies-body" class="divide-y divide-gray-800">
+                                    <tr>
+                                        <td colspan="3" class="px-3 py-4 text-center text-textMuted">이상 항목이 존재하지 않습니다. (무결함)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mathematical Cross Validation -->
+                <div class="bg-cardBg border border-gray-800 rounded-xl p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold font-outfit mb-4 flex items-center gap-2">
+                            <i data-lucide="check-circle" class="text-neonMint"></i> 통계 무결성 교차 검증 (Cross Validation)
+                        </h3>
+                        <p class="text-xs text-textMuted mb-6">개별 그룹 요약 통계량의 합계와 전체 집단 통계량의 불일치 여부를 수학적으로 증명합니다.</p>
+                        
+                        <div class="space-y-4 text-sm text-gray-300">
+                            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                                <span>1. 개별 운용사별 시가총액 단순 합계:</span>
+                                <span id="val-sum-brands" class="font-semibold text-white">0 억 원</span>
+                            </div>
+                            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                                <span>2. 전체 ETF 원본 데이터 기준 시가총액 총합:</span>
+                                <span id="val-sum-total" class="font-semibold text-white">0 억 원</span>
+                            </div>
+                            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                                <span>3. 계산 오차 (소수점 정합성):</span>
+                                <span id="val-sum-diff" class="font-semibold text-neonMint">0.0000 억 원</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2">
+                                <span>4. 교차 검증 판정:</span>
+                                <span id="val-sum-status" class="px-2 py-0.5 rounded text-xs font-semibold bg-green-500/20 text-green-400">성공 (검증 일치)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-[#0A0E17]/60 rounded-lg border border-gray-800 text-xs text-textMuted leading-relaxed mt-6">
+                        <strong>[교차 검증 해설]</strong> 자산운용사별 시가총액 합계의 합산 값과 전체 ETF 원천 레코드의 시가총액 단순 합을 소수점 자리수까지 대조하여 자산 집계 로직의 수학적 정밀함을 입증합니다. 오차가 0에 완전히 수렴한다는 것은 데이터 가공, 운용사 분류 로직(브랜드 파생 변수 추출) 및 소수점 라운딩 처리 단계에서 수학적인 계산 결함이나 데이터 누락이 없었음을 논리적으로 보장합니다.
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-gray-800 bg-[#0A0E17]/50 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-textMuted">
+            <p>© 2026 ETF EDA Dashboard. Powered by Naver Finance & Apache ECharts.</p>
+            <p class="mt-2 text-[10px]">이 서비스의 모든 정보는 단순 데이터 분석 결과 제공 목적으로 투자 권유가 아니며, 최종 자산 처분 및 투자 귀책은 투자자 본인에게 귀속됩니다.</p>
+        </div>
+    </footer>
+
+    <!-- JS Logic Core -->
+    <script>
+        // Global variables to store active dataset
+        let etfData = [];
+        let brandsList = [];
+        let chartInstances = [];
+
+        // Main Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            reloadData();
+        });
+
+        // Toggle Tabs
+        function switchTab(tabName) {
+            // Update button styling
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active-tab');
+            });
+            document.getElementById(`tab-btn-${tabName}`).classList.add('active-tab');
+
+            // Hide/Show contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+
+            // Trigger chart resize because hidden echarts container fails to render properly
+            if (tabName === 'charts') {
+                setTimeout(() => {
+                    chartInstances.forEach(chart => chart.resize());
+                }, 50);
+            }
+        }
+
+        // Data Loader (Hybrid: JSONP -> Fallback JSON)
+        function reloadData() {
+            setLoadingStatus(true);
+            etfData = [];
+
+            // Attempt JSONP loading
+            const callbackName = `window.__jindo2_callback._7957`;
+            
+            // Clean old JSONP script if exists
+            const oldScript = document.getElementById('jsonp-naver-api');
+            if (oldScript) oldScript.remove();
+
+            // Set up a safety timeout (3 seconds) for Fallback trigger
+            let isLoaded = false;
+            const timeoutId = setTimeout(() => {
+                if (!isLoaded) {
+                    console.warn("JSONP request timed out. Triggering fallback JSON load.");
+                    loadFallbackData();
+                }
+            }, 3000);
+
+            // Dynamically define callback function globally as naver API demands window.__jindo2_callback._7957
+            if (!window.__jindo2_callback) window.__jindo2_callback = {};
+            window.__jindo2_callback._7957 = function(data) {
+                isLoaded = true;
+                clearTimeout(timeoutId);
+                console.log("JSONP data successfully fetched from Naver API.");
+                processRawData(data, "Naver API (실시간 JSONP)");
+            };
+
+            // Inject Script tag to fetch
+            const script = document.createElement('script');
+            script.id = 'jsonp-naver-api';
+            script.src = "https://finance.naver.com/api/sise/etfItemList.nhn?etfType=0&targetColumn=market_sum&sortOrder=desc&_callback=window.__jindo2_callback._7957";
+            
+            // On Error trigger fallback directly
+            script.onerror = function() {
+                if (!isLoaded) {
+                    isLoaded = true;
+                    clearTimeout(timeoutId);
+                    console.error("JSONP fetch error. Loading local fallback JSON.");
+                    loadFallbackData();
+                }
+            };
+
+            document.body.appendChild(script);
+        }
+
+        // Fallback Loader (Fetch data/etf_fallback.json)
+        function loadFallbackData() {
+            fetch('data/etf_fallback.json')
+                .then(response => {
+                    if (!response.ok) throw new Error("Fallback JSON file not found.");
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Fallback JSON loaded successfully.");
+                    // In fallback JSON, it is already preprocessed array
+                    processProcessedData(data, "로컬 백업 데이터 (Fallback JSON)");
+                })
+                .catch(err => {
+                    console.error("Critical: Failed to load both Naver API and Local Fallback JSON.", err);
+                    setLoadingStatus(false, "연결 실패 (오류 발생)", true);
+                    alert("데이터를 로드하지 못했습니다. 로컬 백업 파일과 인터넷 상태를 확인해 주세요.");
+                });
+        }
+
+        // Data Preprocessing for RAW JSONP input
+        function processRawData(rawResponse, sourceName) {
+            const list = rawResponse?.result?.etfItemList || [];
+            if (list.length === 0) {
+                console.error("Empty item list inside Naver API response.");
+                loadFallbackData();
+                return;
+            }
+
+            // Client side data cleaning and processing
+            etfData = list.map(item => {
+                const nowVal = parseInt(item.nowVal) || 0;
+                const nav = parseFloat(item.nav) || 0.0;
+                const changeRate = parseFloat(item.changeRate) || 0.0;
+                const changeVal = parseInt(item.changeVal) || 0;
+                const quant = parseInt(item.quant) || 0;
+                const amount = parseInt(item.amonut) || 0; // Naver API typo
+                const marketSum = parseInt(item.marketSum) || 0;
+                const threeMonthEarnRate = parseFloat(item.threeMonthEarnRate) || 0.0;
+
+                // Extract brand
+                const brand = extractBrandName(item.itemname);
+                
+                // NAV 괴리율
+                const navPremium = nav > 0 ? (((nowVal - nav) / nav) * 100) : 0.0;
+
+                return {
+                    itemcode: item.itemcode,
+                    itemname: item.itemname,
+                    brand: brand,
+                    nowVal: nowVal,
+                    changeVal: changeVal,
+                    risefall: item.risefall,
+                    changeRate: changeRate,
+                    nav: nav,
+                    threeMonthEarnRate: threeMonthEarnRate,
+                    quant: quant,
+                    amount: amount,
+                    marketSum: marketSum,
+                    navPremium: parseFloat(navPremium.toFixed(4))
+                };
+            });
+
+            completeDataLoad(sourceName);
+        }
+
+        // Processing pre-processed Fallback data directly
+        function processProcessedData(data, sourceName) {
+            etfData = data;
+            completeDataLoad(sourceName);
+        }
+
+        // Clean & Extract Asset Brand Name
+        function extractBrandName(name) {
+            const known = ["KODEX", "TIGER", "KBSTAR", "ACE", "SOL", "RISE", "ARIRANG", "HANARO", "WOORI", "KoAct", "KOSEF", "PLUS", "UNICORN", "MASTER", "HANA", "TREX", "EON", "KINDEX"];
+            const upper = name.toUpperCase();
+            for (let b of known) {
+                if (upper.includes(b)) return b;
+            }
+            const words = name.split(' ');
+            if (words.length > 0) {
+                const cleaned = words[0].replace(/[^a-zA-Z가-힣]/g, "");
+                if (cleaned) return cleaned;
+            }
+            return "기타";
+        }
+
+        // Finishing loader routine
+        function completeDataLoad(sourceName) {
+            setLoadingStatus(false, sourceName);
+            
+            // Build Brand Lists
+            const uniqueBrands = [...new Set(etfData.map(item => item.brand))];
+            brandsList = uniqueBrands.sort();
+
+            // Populate filters
+            populateBrandFilter();
+
+            // Render Tabs
+            renderOverviewTab();
+            renderExplorerTab();
+            renderValidationTab();
+            renderAllCharts();
+        }
+
+        // Update Connection Status in UI
+        function setLoadingStatus(isLoading, sourceName = "", isError = false) {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const updateTime = document.getElementById('update-time');
+
+            if (isLoading) {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block animate-ping";
+                statusText.innerText = "데이터 로드 중...";
+                statusText.className = "text-yellow-400";
+            } else if (isError) {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500 inline-block";
+                statusText.innerText = sourceName || "로드 오류";
+                statusText.className = "text-red-500";
+                updateTime.innerText = "데이터 수집 에러";
+            } else {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-neonMint inline-block";
+                statusText.innerText = "동기화 완료";
+                statusText.className = "text-neonMint";
+                
+                const now = new Date();
+                updateTime.innerText = `${now.toLocaleTimeString()} (${sourceName})`;
+                document.getElementById('metric-data-source').innerText = sourceName;
+            }
+        }
+
+        // ==========================================
+        // STATISTICAL CALCULATOR FUNCTIONS (JS-Native)
+        // ==========================================
+        function calculateDescriptiveStats(values) {
+            if (values.length === 0) return { mean: 0, median: 0, std: 0, min: 0, max: 0, skew: 0, kurt: 0 };
+            
+            const n = values.length;
+            
+            // Min & Max
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            
+            // Mean
+            const sum = values.reduce((acc, v) => acc + v, 0);
+            const mean = sum / n;
+            
+            // Median
+            const sorted = [...values].sort((a, b) => a - b);
+            const mid = Math.floor(n / 2);
+            const median = n % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            
+            // Standard Deviation
+            const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (n - 1);
+            const std = Math.sqrt(variance);
+            
+            // Skewness and Kurtosis
+            let skew = 0;
+            let kurt = 0;
+            
+            if (std > 0 && n > 2) {
+                // Skewness (Sample)
+                const sumS3 = values.reduce((acc, v) => acc + Math.pow((v - mean) / std, 3), 0);
+                skew = (n / ((n - 1) * (n - 2))) * sumS3;
+                
+                if (n > 3) {
+                    // Kurtosis (Sample Excess)
+                    const sumK4 = values.reduce((acc, v) => acc + Math.pow((v - mean) / std, 4), 0);
+                    const coefficient = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3));
+                    const term2 = (3 * Math.pow(n - 1, 2)) / ((n - 2) * (n - 3));
+                    kurt = (coefficient * sumK4) - term2;
+                }
+            }
+
+            return {
+                mean: mean.toFixed(2),
+                median: median.toFixed(2),
+                std: std.toFixed(2),
+                min: min,
+                max: max,
+                skew: skew.toFixed(4),
+                kurt: kurt.toFixed(4)
+            };
+        }
+
+        // ==========================================
+        // TAB RENDERING FUNCTIONS
+        // ==========================================
+
+        function renderOverviewTab() {
+            // General Stats
+            const totalCount = etfData.length;
+            const totalMarketSum = etfData.reduce((acc, item) => acc + item.marketSum, 0);
+            const totalAmount = etfData.reduce((acc, item) => acc + item.amount, 0);
+
+            document.getElementById('metric-total-count').innerText = `${totalCount.toLocaleString()} 개`;
+            document.getElementById('metric-total-market-cap').innerText = `${totalMarketSum.toLocaleString()} 억 원`;
+            document.getElementById('metric-total-amount').innerText = `${totalAmount.toLocaleString()} 백만 원`;
+
+            // Compute Descriptive Stats Table
+            const numericColumns = [
+                { label: "현재가 (nowVal, 원)", key: "nowVal" },
+                { label: "시가총액 (marketSum, 억 원)", key: "marketSum" },
+                { label: "일 등락률 (changeRate, %)", key: "changeRate" },
+                { label: "3M 수익률 (threeMonthEarnRate, %)", key: "threeMonthEarnRate" },
+                { label: "일 거래량 (quant, 주)", key: "quant" },
+                { label: "일 거래대금 (amount, 백만 원)", key: "amount" }
+            ];
+
+            const statsTableBody = document.getElementById('stats-table-body');
+            statsTableBody.innerHTML = "";
+
+            numericColumns.forEach(col => {
+                const values = etfData.map(item => item[col.key]);
+                const stats = calculateDescriptiveStats(values);
+                
+                const row = `
+                    <tr class="hover:bg-[#1A2234] transition-colors">
+                        <td class="px-4 py-3 font-semibold text-white">${col.label}</td>
+                        <td class="px-4 py-3 text-right">${parseFloat(stats.mean).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right">${parseFloat(stats.median).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right">${parseFloat(stats.std).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right">${stats.min.toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right">${stats.max.toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right text-neonCyan font-mono">${stats.skew}</td>
+                        <td class="px-4 py-3 text-right text-neonPurple font-mono">${stats.kurt}</td>
+                    </tr>
+                `;
+                statsTableBody.innerHTML += row;
+            });
+
+            // Group by Brand
+            const brandGroup = {};
+            etfData.forEach(item => {
+                if (!brandGroup[item.brand]) {
+                    brandGroup[item.brand] = { count: 0, marketSum: 0, sumReturn: 0, countReturn: 0 };
+                }
+                brandGroup[item.brand].count++;
+                brandGroup[item.brand].marketSum += item.marketSum;
+                if (item.threeMonthEarnRate !== 0) {
+                    brandGroup[item.brand].sumReturn += item.threeMonthEarnRate;
+                    brandGroup[item.brand].countReturn++;
+                }
+            });
+
+            // Populate Brand Table
+            const brandTableBody = document.getElementById('brand-table-body');
+            brandTableBody.innerHTML = "";
+
+            const brandStatsList = Object.keys(brandGroup).map(b => {
+                const g = brandGroup[b];
+                const avgReturn = g.countReturn > 0 ? (g.sumReturn / g.countReturn).toFixed(2) : "0.00";
+                return {
+                    brand: b,
+                    count: g.count,
+                    share: ((g.count / totalCount) * 100).toFixed(2),
+                    marketSum: g.marketSum,
+                    avgReturn: avgReturn
+                };
+            }).sort((a, b) => b.marketSum - a.marketSum); // Sort by Market Cap
+
+            brandStatsList.forEach(item => {
+                const returnColor = parseFloat(item.avgReturn) > 0 ? 'text-red-400' : (parseFloat(item.avgReturn) < 0 ? 'text-blue-400' : 'text-gray-400');
+                const row = `
+                    <tr class="hover:bg-[#1A2234] transition-colors">
+                        <td class="px-4 py-2.5 font-medium text-white">${item.brand}</td>
+                        <td class="px-4 py-2.5 text-right">${item.count.toLocaleString()}</td>
+                        <td class="px-4 py-2.5 text-right text-textMuted">${item.share}%</td>
+                        <td class="px-4 py-2.5 text-right font-semibold">${item.marketSum.toLocaleString()}</td>
+                        <td class="px-4 py-2.5 text-right ${returnColor}">${item.avgReturn}%</td>
+                    </tr>
+                `;
+                brandTableBody.innerHTML += row;
+            });
+
+            // Mini Overview Pie Chart (ECharts)
+            const overviewPie = echarts.init(document.getElementById('overview-pie-chart'), 'dark');
+            const pieData = brandStatsList.slice(0, 5).map(item => ({ name: item.brand, value: item.marketSum }));
+            const remainingSum = brandStatsList.slice(5).reduce((acc, item) => acc + item.marketSum, 0);
+            if (remainingSum > 0) {
+                pieData.push({ name: "기타", value: remainingSum });
+            }
+
+            overviewPie.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'item', formatter: '{b}: {c}억 ({d}%)' },
+                series: [{
+                    type: 'pie',
+                    radius: ['45%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 6, borderColor: '#121824', borderWidth: 2 },
+                    label: { show: true, position: 'outside', formatter: '{b}\n({d}%)', fontSize: 10, color: '#8A99AD' },
+                    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+                    data: pieData
+                }]
+            });
+            chartInstances.push(overviewPie);
+        }
+
+        function populateBrandFilter() {
+            const filterSelect = document.getElementById('explorer-filter-brand');
+            filterSelect.innerHTML = `<option value="ALL">전체 운용사</option>`;
+            brandsList.forEach(b => {
+                filterSelect.innerHTML += `<option value="${b}">${b}</option>`;
+            });
+        }
+
+        // ==========================================
+        // EXPLORER FUNCTIONALITY
+        // ==========================================
+        function filterExplorer() {
+            const query = document.getElementById('explorer-search').value.toLowerCase().trim();
+            const brandVal = document.getElementById('explorer-filter-brand').value;
+            const sortVal = document.getElementById('explorer-sort').value;
+
+            let filtered = etfData.filter(item => {
+                const matchesQuery = item.itemname.toLowerCase().includes(query) || item.itemcode.includes(query);
+                const matchesBrand = brandVal === 'ALL' || item.brand === brandVal;
+                return matchesQuery && matchesBrand;
+            });
+
+            // Sort logic
+            const [field, direction] = sortVal.split('_');
+            filtered.sort((a, b) => {
+                let keyA = a[field];
+                let keyB = b[field];
+
+                if (typeof keyA === 'string') {
+                    return direction === 'asc' ? keyA.localeCompare(keyB) : keyB.localeCompare(keyA);
+                } else {
+                    return direction === 'asc' ? keyA - keyB : keyB - keyA;
+                }
+            });
+
+            // Render Explorer Table Body
+            const tbody = document.getElementById('explorer-table-body');
+            tbody.innerHTML = "";
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-textMuted">조건에 일치하는 ETF 종목이 없습니다.</td></tr>`;
+            } else {
+                filtered.forEach(item => {
+                    const chgSign = item.risefall === '2' ? '+' : (item.risefall === '5' ? '-' : '');
+                    const chgColor = item.risefall === '2' ? 'text-red-400' : (item.risefall === '5' ? 'text-blue-400' : 'text-gray-400');
+                    const premiumColor = item.navPremium > 0 ? 'text-yellow-500' : (item.navPremium < 0 ? 'text-teal-400' : 'text-gray-400');
+                    const returnColor = item.threeMonthEarnRate > 0 ? 'text-red-400' : (item.threeMonthEarnRate < 0 ? 'text-blue-400' : 'text-gray-400');
+
+                    const row = `
+                        <tr class="hover:bg-[#1A2234] border-b border-gray-800 transition-colors">
+                            <td class="px-4 py-3 font-mono text-xs text-textMuted">${item.itemcode}</td>
+                            <td class="px-4 py-3 font-semibold text-white max-w-[200px] truncate" title="${item.itemname}">${item.itemname}</td>
+                            <td class="px-4 py-3 text-xs"><span class="px-2 py-0.5 bg-gray-800 rounded text-textMuted font-medium">${item.brand}</span></td>
+                            <td class="px-4 py-3 text-right font-medium">${item.nowVal.toLocaleString()}</td>
+                            <td class="px-4 py-3 text-right ${chgColor} text-xs font-semibold">${chgSign}${item.changeVal.toLocaleString()}</td>
+                            <td class="px-4 py-3 text-right ${chgColor} text-xs font-semibold">${chgSign}${item.changeRate.toFixed(2)}%</td>
+                            <td class="px-4 py-3 text-right font-semibold">${item.marketSum.toLocaleString()}</td>
+                            <td class="px-4 py-3 text-right font-semibold">${item.amount.toLocaleString()}</td>
+                            <td class="px-4 py-3 text-right font-mono text-xs ${premiumColor}">${item.navPremium > 0 ? '+' : ''}${item.navPremium}%</td>
+                            <td class="px-4 py-3 text-right font-semibold ${returnColor}">${item.threeMonthEarnRate > 0 ? '+' : ''}${item.threeMonthEarnRate.toFixed(2)}%</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            }
+
+            document.getElementById('explorer-count').innerText = `총 ${etfData.length.toLocaleString()}개 중 ${filtered.length.toLocaleString()}개 종목 조회됨`;
+        }
+
+        function renderExplorerTab() {
+            filterExplorer();
+        }
+
+        // ==========================================
+        // DATA VALIDATION MECHANISM
+        // ==========================================
+        function renderValidationTab() {
+            let rule1Anomalies = [];
+            let rule2Anomalies = [];
+            let rule3Anomalies = [];
+
+            etfData.forEach(item => {
+                // Rule 1: price or NAV <= 0
+                if (item.nowVal <= 0 || item.nav <= 0) {
+                    rule1Anomalies.push({ itemcode: item.itemcode, itemname: item.itemname, reason: "가격 또는 NAV 정보 누락/음수" });
+                }
+                // Rule 2: Volume exists, but transaction amount is 0 (logical bug)
+                if (item.quant > 0 && item.amount <= 0) {
+                    rule2Anomalies.push({ itemcode: item.itemcode, itemname: item.itemname, reason: "거래량 존재하나 거래대금 누락" });
+                }
+                // Rule 3: Extreme navPremium > 3% or < -3%
+                if (Math.abs(item.navPremium) > 3.0) {
+                    rule3Anomalies.push({ itemcode: item.itemcode, itemname: item.itemname, reason: `NAV 괴리율 극단 이탈 (${item.navPremium}%)` });
+                }
+            });
+
+            // Update Rule Badge
+            updateValidationBadge("val-rule-1", rule1Anomalies.length);
+            updateValidationBadge("val-rule-2", rule2Anomalies.length);
+            updateValidationBadge("val-rule-3", rule3Anomalies.length);
+
+            // Populate Anomalies Table
+            const anomaliesBody = document.getElementById('val-anomalies-body');
+            anomaliesBody.innerHTML = "";
+            const allAnomalies = [...rule1Anomalies, ...rule2Anomalies, ...rule3Anomalies];
+
+            if (allAnomalies.length === 0) {
+                anomaliesBody.innerHTML = `<tr><td colspan="3" class="px-3 py-4 text-center text-textMuted">이상 항목이 존재하지 않습니다. (검증 통과)</td></tr>`;
+            } else {
+                allAnomalies.forEach(a => {
+                    anomaliesBody.innerHTML += `
+                        <tr class="hover:bg-[#1A2234] border-b border-gray-800 transition-colors">
+                            <td class="px-3 py-2 font-mono text-xs text-textMuted">${a.itemcode}</td>
+                            <td class="px-3 py-2 font-semibold text-white text-xs">${a.itemname}</td>
+                            <td class="px-3 py-2 text-xs text-yellow-500 font-medium">${a.reason}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // Cross Validation calculation
+            const brandSumTotal = etfData.reduce((acc, item) => acc + item.marketSum, 0);
+            
+            // Group and round sum
+            const brandGroupSum = {};
+            etfData.forEach(item => {
+                if (!brandGroupSum[item.brand]) brandGroupSum[item.brand] = 0;
+                brandGroupSum[item.brand] += item.marketSum;
+            });
+            const sumOfBrandSums = Object.values(brandGroupSum).reduce((acc, v) => acc + v, 0);
+            const mathDiff = Math.abs(sumOfBrandSums - brandSumTotal);
+
+            document.getElementById('val-sum-brands').innerText = `${sumOfBrandSums.toLocaleString()} 억 원`;
+            document.getElementById('val-sum-total').innerText = `${brandSumTotal.toLocaleString()} 억 원`;
+            document.getElementById('val-sum-diff').innerText = `${mathDiff.toFixed(4)} 억 원`;
+
+            const statusSpan = document.getElementById('val-sum-status');
+            if (mathDiff === 0) {
+                statusSpan.className = "px-2 py-0.5 rounded text-xs font-semibold bg-green-500/20 text-green-400";
+                statusSpan.innerText = "성공 (검증 일치)";
+            } else {
+                statusSpan.className = "px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400";
+                statusSpan.innerText = "경고 (불일치 발견)";
+            }
+        }
+
+        function updateValidationBadge(elementId, count) {
+            const badge = document.getElementById(elementId);
+            if (count === 0) {
+                badge.className = "px-2.5 py-1 rounded text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30";
+                badge.innerText = "정상 (Pass)";
+            } else {
+                badge.className = "px-2.5 py-1 rounded text-xs font-semibold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 animate-pulse";
+                badge.innerText = `주의 (${count}건 발견)`;
+            }
+        }
+
+        // ==========================================
+        // 10 INTERACTIVE ECHARTS GENERATORS
+        // ==========================================
+        function renderAllCharts() {
+            // Clean older instances
+            chartInstances.forEach(inst => {
+                if (inst && inst !== echarts.getInstanceByDom(document.getElementById('overview-pie-chart'))) {
+                    inst.dispose();
+                }
+            });
+            chartInstances = [chartInstances[0]]; // Retain overview pie instance
+
+            // Setup Custom ECharts options helper
+            const themeConfig = {
+                textStyle: { color: '#8A99AD' },
+                grid: { left: '4%', right: '4%', bottom: '10%', top: '15%', containLabel: true }
+            };
+
+            // 1. Chart: Market Cap Top 10
+            const capData = [...etfData].sort((a,b) => b.marketSum - a.marketSum).slice(0, 10);
+            createBarChart('chart-market-cap-top10', 
+                capData.map(x => x.itemname).reverse(), 
+                capData.map(x => x.marketSum).reverse(), 
+                '시가총액 (억 원)', '#00FFA3', themeConfig
+            );
+            populateSummaryTable('table-market-cap-top10', capData, ['itemcode', 'itemname', 'marketSum']);
+
+            // 2. Chart: Trading Amount Top 10
+            const amtData = [...etfData].sort((a,b) => b.amount - a.amount).slice(0, 10);
+            createBarChart('chart-amount-top10', 
+                amtData.map(x => x.itemname).reverse(), 
+                amtData.map(x => x.amount).reverse(), 
+                '거래대금 (백만 원)', '#00E5FF', themeConfig
+            );
+            populateSummaryTable('table-amount-top10', amtData, ['itemcode', 'itemname', 'amount']);
+
+            // 3. Chart: 3M Return Histogram (using bins)
+            const returns = etfData.map(x => x.threeMonthEarnRate).filter(r => r !== 0);
+            const returnBins = computeHistogramBins(returns, -30, 30, 10);
+            createHistogramChart('chart-return-dist', returnBins.labels, returnBins.counts, '3M 수익률 빈도 (종목 수)', '#BD00FF', themeConfig);
+            populateSummaryTableFromBins('table-return-dist', returnBins);
+
+            // 4. Chart: Brand Share (Count)
+            const brandCounts = {};
+            etfData.forEach(x => brandCounts[x.brand] = (brandCounts[x.brand] || 0) + 1);
+            const brandCountData = Object.keys(brandCounts).map(k => ({ name: k, value: brandCounts[k] })).sort((a,b) => b.value - a.value);
+            createPieChart('chart-brand-count', brandCountData, themeConfig);
+            populateSummaryTable('table-brand-count', brandCountData.slice(0, 5), ['name', 'value'], true);
+
+            // 5. Chart: Brand Share (Market Cap)
+            const brandCaps = {};
+            etfData.forEach(x => brandCaps[x.brand] = (brandCaps[x.brand] || 0) + x.marketSum);
+            const brandCapData = Object.keys(brandCaps).map(k => ({ name: k, value: brandCaps[k] })).sort((a,b) => b.value - a.value);
+            createPieChart('chart-brand-market-sum', brandCapData, themeConfig);
+            populateSummaryTable('table-brand-market-sum', brandCapData.slice(0, 5), ['name', 'value'], true);
+
+            // 6. Chart: Volume vs Market Cap Scatter
+            const scatterData1 = etfData.map(x => [x.marketSum, x.quant, x.itemname]);
+            createScatterChart('chart-scatter-quant-cap', scatterData1, '시가총액 (억 원)', '거래량 (주)', '#FFA800', themeConfig);
+            const scatterSummary1 = [...etfData].sort((a,b) => b.quant - a.quant).slice(0, 5);
+            populateSummaryTable('table-scatter-quant-cap', scatterSummary1, ['itemcode', 'itemname', 'marketSum', 'quant']);
+
+            // 7. Chart: 3M Return vs Amount Scatter
+            const scatterData2 = etfData.filter(x => x.threeMonthEarnRate !== 0).map(x => [x.threeMonthEarnRate, x.amount, x.itemname]);
+            createScatterChart('chart-scatter-return-amount', scatterData2, '3M 수익률 (%)', '거래대금 (백만 원)', '#0099FF', themeConfig);
+            const scatterSummary2 = [...etfData].sort((a,b) => b.threeMonthEarnRate - a.threeMonthEarnRate).slice(0, 5);
+            populateSummaryTable('table-scatter-return-amount', scatterSummary2, ['itemcode', 'itemname', 'threeMonthEarnRate', 'amount']);
+
+            // 8. Chart: Daily Change Rate Distribution Histogram
+            const changeRates = etfData.map(x => x.changeRate);
+            const chgBins = computeHistogramBins(changeRates, -5, 5, 0.5);
+            createHistogramChart('chart-change-rate-dist', chgBins.labels, chgBins.counts, '등락률 빈도 (종목 수)', '#00E575', themeConfig);
+            populateSummaryTableFromBins('table-change-rate-dist', chgBins);
+
+            // 9. Chart: NAV Premium Distribution Histogram
+            const premiums = etfData.map(x => x.navPremium).filter(p => p !== 0 && Math.abs(p) < 5);
+            const premBins = computeHistogramBins(premiums, -2, 2, 0.2);
+            createHistogramChart('chart-nav-premium-dist', premBins.labels, premBins.counts, '괴리율 빈도 (종목 수)', '#00CCCC', themeConfig);
+            populateSummaryTableFromBins('table-nav-premium-dist', premBins);
+
+            // 10. Chart: Average 3M Return comparison by Brand
+            const brandReturns = {};
+            etfData.forEach(x => {
+                if (x.threeMonthEarnRate !== 0) {
+                    if (!brandReturns[x.brand]) brandReturns[x.brand] = { sum: 0, count: 0 };
+                    brandReturns[x.brand].sum += x.threeMonthEarnRate;
+                    brandReturns[x.brand].count++;
+                }
+            });
+            const brandAvgReturns = Object.keys(brandReturns)
+                .map(k => ({ name: k, value: parseFloat((brandReturns[k].sum / brandReturns[k].count).toFixed(2)) }))
+                .filter(x => x.value !== 0)
+                .sort((a,b) => b.value - a.value);
+            createBarChart('chart-brand-avg-return', 
+                brandAvgReturns.map(x => x.name).reverse(), 
+                brandAvgReturns.map(x => x.value).reverse(), 
+                '평균 3M 수익률 (%)', '#FFCC00', themeConfig
+            );
+            populateSummaryTable('table-brand-avg-return', brandAvgReturns.slice(0, 5), ['name', 'value'], true);
+        }
+
+        // ==========================================
+        // ECHARTS WRAPPERS & PLOT BUILDERS
+        // ==========================================
+        
+        function createBarChart(domId, yData, xData, seriesName, barColor, config) {
+            const chart = echarts.init(document.getElementById(domId), 'dark');
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: config.grid,
+                xAxis: { type: 'value', axisLabel: { color: config.textStyle.color }, splitLine: { lineStyle: { color: '#1E2937' } } },
+                yAxis: { type: 'category', data: yData, axisLabel: { color: config.textStyle.color, interval: 0, formatter: (val) => val.length > 8 ? val.substring(0,8) + '..' : val } },
+                series: [{
+                    name: seriesName,
+                    type: 'bar',
+                    data: xData,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: 'rgba(18, 24, 36, 0.4)' },
+                            { offset: 1, color: barColor }
+                        ]),
+                        borderRadius: [0, 4, 4, 0]
+                    }
+                }]
+            });
+            chartInstances.push(chart);
+        }
+
+        function createPieChart(domId, data, config) {
+            const chart = echarts.init(document.getElementById(domId), 'dark');
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                series: [{
+                    type: 'pie',
+                    radius: '65%',
+                    center: ['50%', '50%'],
+                    data: data.slice(0, 8).concat(data.length > 8 ? [{ name: '기타', value: data.slice(8).reduce((acc,x) => acc + x.value, 0) }] : []),
+                    itemStyle: { borderRadius: 4, borderColor: '#121824', borderWidth: 1.5 },
+                    label: { color: '#8A99AD', fontSize: 10, formatter: '{b}: {d}%' }
+                }]
+            });
+            chartInstances.push(chart);
+        }
+
+        function createScatterChart(domId, data, xLabel, yLabel, color, config) {
+            const chart = echarts.init(document.getElementById(domId), 'dark');
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { 
+                    trigger: 'item', 
+                    formatter: (params) => `${params.value[2]}<br/>${xLabel}: ${params.value[0].toLocaleString()}<br/>${yLabel}: ${params.value[1].toLocaleString()}` 
+                },
+                grid: config.grid,
+                xAxis: { type: 'value', name: xLabel, nameLocation: 'middle', nameGap: 24, axisLabel: { color: config.textStyle.color }, splitLine: { lineStyle: { color: '#1E2937' } } },
+                yAxis: { type: 'value', name: yLabel, axisLabel: { color: config.textStyle.color }, splitLine: { lineStyle: { color: '#1E2937' } } },
+                series: [{
+                    type: 'scatter',
+                    symbolSize: 8,
+                    data: data,
+                    itemStyle: { color: color, opacity: 0.7 }
+                }]
+            });
+            chartInstances.push(chart);
+        }
+
+        function createHistogramChart(domId, labels, counts, seriesName, color, config) {
+            const chart = echarts.init(document.getElementById(domId), 'dark');
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+                grid: config.grid,
+                xAxis: { type: 'category', data: labels, axisLabel: { color: config.textStyle.color } },
+                yAxis: { type: 'value', axisLabel: { color: config.textStyle.color }, splitLine: { lineStyle: { color: '#1E2937' } } },
+                series: [{
+                    name: seriesName,
+                    type: 'bar',
+                    barWidth: '90%',
+                    data: counts,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: color },
+                            { offset: 1, color: 'rgba(18, 24, 36, 0.2)' }
+                        ]),
+                        borderRadius: [3, 3, 0, 0]
+                    }
+                }]
+            });
+            chartInstances.push(chart);
+        }
+
+        // ==========================================
+        // STATISTICAL MATHEMATICAL UTILS
+        // ==========================================
+        function computeHistogramBins(data, min, max, step) {
+            const counts = [];
+            const labels = [];
+            
+            for (let val = min; val < max; val += step) {
+                const limit = val + step;
+                labels.push(`${val.toFixed(1)} ~ ${limit.toFixed(1)}`);
+                
+                const count = data.filter(x => x >= val && x < limit).length;
+                counts.push(count);
+            }
+            
+            return { labels, counts };
+        }
+
+        // ==========================================
+        // MINI TABLE RENDERERS (INSIDE CHARTS)
+        // ==========================================
+        function populateSummaryTable(containerId, data, columns, isSimpleObject = false) {
+            const wrapper = document.getElementById(containerId);
+            wrapper.innerHTML = "";
+
+            const colHeaders = {
+                itemcode: "종목코드",
+                itemname: "종목명",
+                marketSum: "시가총액(억)",
+                amount: "거래대금(백만)",
+                threeMonthEarnRate: "3M 수익률(%)",
+                quant: "거래량(주)",
+                name: "운용사/구분",
+                value: "합계/개수"
+            };
+
+            let table = `
+                <table class="w-full text-left text-[11px] border border-gray-800 text-gray-400">
+                    <thead class="bg-[#121824] text-textMuted">
+                        <tr>
+                            ${columns.map(c => `<th class="px-2 py-1.5">${colHeaders[c] || c}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        ${data.map(row => `
+                            <tr class="hover:bg-[#121824]/50">
+                                ${columns.map(c => {
+                                    let cell = row[c];
+                                    if (typeof cell === 'number') {
+                                        cell = cell.toLocaleString();
+                                    }
+                                    return `<td class="px-2 py-1">${cell}</td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            wrapper.innerHTML = table;
+        }
+
+        function populateSummaryTableFromBins(containerId, bins) {
+            const wrapper = document.getElementById(containerId);
+            wrapper.innerHTML = "";
+            
+            // Map top 3 bins with highest density
+            const zipped = bins.labels.map((lbl, idx) => ({ label: lbl, count: bins.counts[idx] }));
+            const sortedBins = [...zipped].sort((a,b) => b.count - a.count).slice(0, 3);
+
+            let table = `
+                <table class="w-full text-left text-[11px] border border-gray-800 text-gray-400">
+                    <thead class="bg-[#121824] text-textMuted">
+                        <tr>
+                            <th class="px-2 py-1.5">최빈 구간 (Top 3 Density)</th>
+                            <th class="px-2 py-1.5 text-right">소속 종목 수</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        ${sortedBins.map(b => `
+                            <tr>
+                                <td class="px-2 py-1 font-semibold text-white">${b.label}</td>
+                                <td class="px-2 py-1 text-right font-mono text-neonCyan">${b.count.toLocaleString()} 개</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            wrapper.innerHTML = table;
+        }
+
+        // Global Resize event for responsive ECharts
+        window.addEventListener('resize', () => {
+            chartInstances.forEach(chart => chart.resize());
+        });
+    </script>
+</body>
+</html>
